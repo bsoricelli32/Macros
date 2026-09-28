@@ -31,12 +31,20 @@ main{max-width:460px;margin:0 auto;padding-inline:20px;padding-block:28px;displa
 .fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--fill);border-radius:17px 0 0 17px;transition:width .25s ease}
 .fill.over{background:var(--over)}
 .goal{position:absolute;top:-2px;bottom:-2px;left:70%;border-left:3px dotted var(--goal)}
-.steps{display:flex;justify-content:space-between;gap:12px}
+.steps{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .step{display:flex;align-items:center;gap:6px}
-.step button{width:48px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);color:var(--fg);font-family:var(--mono);font-size:20px;cursor:pointer}
+.step button{width:42px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);color:var(--fg);font-family:var(--mono);font-size:20px;cursor:pointer}
 .step button:active{background:var(--line)}
 .step button:focus-visible,.goalbtn:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
-.step span{min-width:34px;text-align:center;font-family:var(--mono);font-size:16px;color:var(--mute)}
+.step span{min-width:24px;text-align:center;font-family:var(--mono);font-size:16px;color:var(--mute)}
+.add{position:relative;flex:1;min-width:0;max-width:110px;height:40px;border-radius:20px;border:1.5px solid var(--line);background:var(--panel);color:var(--mute);font-family:var(--mono);font-size:14px;letter-spacing:.04em;text-transform:uppercase;overflow:hidden;cursor:pointer;touch-action:manipulation;-webkit-touch-callout:none;display:flex;align-items:center;justify-content:center;padding:0}
+.add.armed{background:var(--fill);border-color:var(--fill);color:#fff;text-transform:none}
+.add .prog{position:absolute;inset:0 auto 0 0;width:0;background:rgba(255,255,255,.28)}
+.add.holding .prog{width:100%;transition:width .6s linear}
+.add input{width:100%;height:100%;background:transparent;border:0;color:var(--fg);font-family:var(--mono);font-size:16px;text-align:center;outline:none}
+.add input::-webkit-inner-spin-button,.add input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.add input{-moz-appearance:textfield}
+.add .lbl{position:relative}
 .foot{display:flex;justify-content:center}
 .reset{background:none;border:0;color:var(--mute);font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:8px;cursor:pointer}
 .edit{display:flex;gap:8px;align-items:center}
@@ -63,6 +71,7 @@ app.innerHTML=DEF.map(d=>`
   <div class="bar"><div class="fill" id="f-${d.k}"></div><div class="goal"></div></div>
   <div class="steps">
     <div class="step"><button data-d="-10" aria-label="Minus 10 ${d.name}">&minus;</button><span>10</span><button data-d="10" aria-label="Plus 10 ${d.name}">+</button></div>
+    <div class="add" id="a-${d.k}" role="button" tabindex="0" aria-label="Add custom ${d.name}"><span class="prog"></span><span class="lbl">Add</span></div>
     <div class="step"><button data-d="-5" aria-label="Minus 5 ${d.name}">&minus;</button><span>5</span><button data-d="5" aria-label="Plus 5 ${d.name}">+</button></div>
   </div>
 </section>`).join("")+`<div class="foot"><button class="reset" id="reset">Reset today</button></div>`;
@@ -89,6 +98,35 @@ app.addEventListener("click",e=>{
     i.addEventListener("blur",done,{once:true});
     i.addEventListener("keydown",ev=>{if(ev.key==="Enter")i.blur()});
   }
+});
+
+const HOLD=600;
+function pillIdle(p){p.className="add";p.dataset.amt="";p.innerHTML='<span class="prog"></span><span class="lbl">Add</span>'}
+function pillArmed(p,n){p.className="add armed";p.dataset.amt=n;p.innerHTML='<span class="prog"></span><span class="lbl">+'+n.toLocaleString()+'</span>'}
+function pillEdit(p){
+  const cur=p.dataset.amt||"";p.className="add editing";
+  p.innerHTML='<input id="in-'+p.id+'" type="number" inputmode="numeric" min="1" value="'+cur+'" aria-label="Custom amount">';
+  const i=p.querySelector("input");i.focus();i.select();
+  let fin=false;const done=()=>{if(fin)return;fin=true;const n=parseInt(i.value,10);n>0?pillArmed(p,n):pillIdle(p)};
+  i.addEventListener("blur",done);
+  i.addEventListener("keydown",e=>{e.stopPropagation();if(e.key==="Enter")done()});
+}
+document.querySelectorAll(".add").forEach(p=>{
+  let t=null,held=false;
+  p.addEventListener("contextmenu",e=>e.preventDefault());
+  p.addEventListener("pointerdown",e=>{
+    if(!p.classList.contains("armed"))return;
+    held=false;p.classList.add("holding");
+    t=setTimeout(()=>{held=true;rollover();const k=p.id.slice(2);S.v[k]+= +p.dataset.amt;save();render();if(navigator.vibrate)navigator.vibrate(20);pillIdle(p)},HOLD);
+  });
+  const cancel=()=>{clearTimeout(t);p.classList.remove("holding")};
+  p.addEventListener("pointerleave",cancel);p.addEventListener("pointercancel",cancel);
+  p.addEventListener("pointerup",()=>{
+    cancel();
+    if(held){held=false;return}
+    if(!p.classList.contains("editing"))pillEdit(p);
+  });
+  p.addEventListener("keydown",e=>{if(e.key==="Enter"&&!p.classList.contains("editing")){e.preventDefault();pillEdit(p)}});
 });
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){rollover();render()}});
 render();
